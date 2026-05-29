@@ -756,6 +756,16 @@ static int fixup_options(struct thread_data *td)
 			o->max_bs[ddir] = o->bs[ddir];
 	}
 
+	if (o->dedupe_block_size == 0 || o->dedupe_block_size > o->min_bs[DDIR_WRITE] || !o->dedupe_percentage) {
+		o->dedupe_block_size = o->min_bs[DDIR_WRITE];
+		dprint(FD_DEDUPE, "Set dedupe_block_size to %llu\n", o->dedupe_block_size);
+	}
+
+	if (o->dedupe_min_run > o->dedupe_max_run) {
+		o->dedupe_max_run = o->dedupe_min_run;
+		dprint(FD_DEDUPE, "Fining dedupe min/max runs: Set dedupe_max_run to %d\n", o->dedupe_max_run);
+	}
+
 	o->rw_min_bs = -1;
 	for_each_rw_ddir(ddir) {
 		o->rw_min_bs = min(o->rw_min_bs, o->min_bs[ddir]);
@@ -1110,6 +1120,14 @@ static int fixup_options(struct thread_data *td)
 		}
 	}
 
+	if (o->dedupe_percentage && o->dedupe_mode == DEDUPE_MODE_WORKING_SET2) {
+		// printf("Using dedupe pregenerated buffer and a set caclulted as modulo of sets\n");
+		if (o->dedupe_working_set_percentage > 100) {
+			log_err("fio: dedupe_working_set_percentage must be <= vol size\n");
+			ret |= 1;
+		}
+	}
+
 	for_each_td(td2) {
 		if (td->o.ss_check_interval != td2->o.ss_check_interval) {
 			log_err("fio: conflicting ss_check_interval: %llu and %llu, must be globally equal\n",
@@ -1236,18 +1254,51 @@ void td_fill_rand_seeds(struct thread_data *td)
 
 	init_rand_seed(&td->fdp_state, td->rand_seeds[FIO_RAND_FDP_OFF], false);
 	init_rand_seed(&td->sprandom_state, td->rand_seeds[FIO_RAND_SPRANDOM_OFF], false);
+	init_rand_seed(&td->dedupe_buf_state, td->rand_seeds[FIO_RAND_DEDUPE_BUF_OFF], use64);
 }
 
 static int setup_random_seeds(struct thread_data *td)
 {
 	uint64_t seed;
-	unsigned int i;
+	unsigned int i, t;
 
 	if (!td->o.rand_repeatable && !fio_option_is_set(&td->o, rand_seed)) {
+		/*
+		 * Init all seeds randomly first.
+		 */
 		int ret = init_random_seeds(td->rand_seeds, sizeof(td->rand_seeds));
 		dprint(FD_RANDOM, "using system RNG for random seeds\n");
 		if (ret)
 			return ret;
+		if (td->o.buf_rand_repeatable || fio_option_is_set(&td->o, buf_rand_seed)) {
+			/*
+			 * With this option set, we want to generate the same dedupe buffers' content.
+			 * So we set the follwoing to be repatable:
+			 * - FIO_RAND_DEDUPE_BUF_OFF - start seed for buffers. WORKING_SET2 will have the same seed to every TD.
+			 * - FIO_RAND_DEDUPE_WORKING_SET_IX - defines a seed to choose a set for WORKING_SET type of dedupe.
+			 * NB. FIO_DEDUPE_OFF is a seed to select if a block is dedupable or not. We want it random.
+			 * Do it as exactly same way as for rand_repeatable=true with two sets set to be predictable.
+			 */
+			seed = td->o.rand_seed;
+			for (i = 0; i < 4; i++)
+				seed *= 0x9e370001UL;
+			for (i = 0; i < FIO_RAND_NR_OFFS; i++) {
+				if (i == FIO_RAND_DEDUPE_BUF_OFF) {
+					t = (td->o.dedupe_mode == DEDUPE_MODE_WORKING_SET) ? td->thread_number : 1;
+					// A seed to generate dedupe buffer for a td*
+					// With WORKING_SET2 we want the same buffer generated for every td
+					td->rand_seeds[FIO_RAND_DEDUPE_BUF_OFF] = seed * t + FIO_RAND_DEDUPE_BUF_OFF;
+				}
+				if (i == FIO_RAND_DEDUPE_WORKING_SET_IX && td->o.dedupe_mode != DEDUPE_MODE_WORKING_SET2) {
+					// set index for WORKING_SET 
+					td->rand_seeds[FIO_RAND_DEDUPE_WORKING_SET_IX] = seed * td->thread_number + FIO_RAND_DEDUPE_WORKING_SET_IX;
+				}
+				seed *= 0x9e370001UL;
+			}
+			dprint(FD_RANDOM, "Dedupe Buff seed %lu\n", td->rand_seeds[FIO_RAND_DEDUPE_BUF_OFF]);
+			dprint(FD_RANDOM, "Dedupe working set seed %lu\n", td->rand_seeds[FIO_RAND_DEDUPE_WORKING_SET_IX]);
+			dprint(FD_RANDOM, "Dedupe state seed %lu\n", td->rand_seeds[FIO_DEDUPE_OFF]);
+		}
 	} else {
 		seed = td->o.rand_seed;
 		for (i = 0; i < 4; i++)
@@ -1258,6 +1309,8 @@ static int setup_random_seeds(struct thread_data *td)
 			seed *= 0x9e370001UL;
 		}
 	}
+
+	td_fill_rand_seeds(td);
 
 	dprint(FD_RANDOM, "FIO_RAND_NR_OFFS=%d\n", FIO_RAND_NR_OFFS);
 	for (int i = 0; i < FIO_RAND_NR_OFFS; i++)
@@ -2531,6 +2584,10 @@ const struct debug_level debug_levels[] = {
 	{ .name = "compress",
 	  .help = "Log compression logging",
 	  .shift = FD_COMPRESS,
+	},
+	{ .name = "dedupe",
+			.help = "Log dedupe logging",
+			.shift = FD_DEDUPE,
 	},
 	{ .name = "steadystate",
 	  .help = "Steady state detection logging",

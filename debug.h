@@ -20,6 +20,7 @@ enum {
 	FD_NET,
 	FD_RATE,
 	FD_COMPRESS,
+	FD_DEDUPE,
 	FD_STEADYSTATE,
 	FD_HELPERTHREAD,
 	FD_ZBD,
@@ -67,10 +68,17 @@ void __dprint(int type, const char *str, ...) __attribute__((format (printf, 2, 
 		__dprint((type), (str), ##args);	\
 	} while (0)					\
 
+#define d_is_set(type) (((1 << type) & fio_debug) != 0)
+
 #else
 
 static inline void dprint(int type, const char *str, ...)
 {
+}
+
+static inline bool d_is_set(int type) 
+{
+	return false;
 }
 #endif
 

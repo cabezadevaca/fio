@@ -2383,7 +2383,11 @@ static struct frand_state *get_buf_state(struct thread_data *td)
 	if (!td->o.dedupe_percentage)
 		return &td->buf_state;
 	else if (td->o.dedupe_percentage == 100) {
-		frand_copy(&td->buf_state_prev, &td->buf_state);
+		frand_copy(&td->buf_state_prev, &td->dedupe_buf_state);
+		return &td->dedupe_buf_state;
+	}
+
+	if (td->o.use_unique_bitmap) {
 		return &td->buf_state;
 	}
 
@@ -2404,6 +2408,9 @@ static struct frand_state *get_buf_state(struct thread_data *td)
 			i = rand_between(&td->dedupe_working_set_index_state, 0, td->num_unique_pages - 1);
 			frand_copy(&td->buf_state_ret, &td->dedupe_working_set_states[i]);
 			return &td->buf_state_ret;
+		case DEDUPE_MODE_WORKING_SET2:
+			// Returning NULL here to indicate that mode2 is used
+			return NULL;
 		default:
 			log_err("unexpected dedupe mode %u\n", td->o.dedupe_mode);
 			assert(0);
@@ -2420,7 +2427,100 @@ static void save_buf_state(struct thread_data *td, struct frand_state *rs)
 		frand_copy(&td->buf_state_prev, rs);
 }
 
-void fill_io_buffer(struct thread_data *td, void *buf, unsigned long long min_write,
+void fill_buffer_default(struct thread_data *td, struct io_u *io_u, void *buf, unsigned long long min_write,
+	unsigned long long max_bs) 
+{
+	unsigned int perc = td->o.compress_percentage;
+	struct frand_state *rs = NULL;
+	unsigned long long left = max_bs;
+	unsigned long long this_write;
+
+	struct thread_options *o = &td->o;
+
+	do {
+		/*
+		 * Buffers are either entirely dedupe-able or not.
+		 * If we choose to dedup, the buffer should undergo
+		 * the same manipulation as the original write. Which
+		 * means we should retrack the steps we took for compression
+		 * as well.
+		 */
+		if (!rs)
+			rs = get_buf_state(td);
+
+		min_write = min(min_write, left);
+
+		this_write = min_not_zero(min_write, (unsigned long long) td->o.compress_chunk);
+
+		fill_random_buf_percentage(rs, buf, perc,
+			this_write, this_write,
+			o->buffer_pattern,
+			o->buffer_pattern_bytes);
+
+		buf += this_write;
+		left -= this_write;
+		save_buf_state(td, rs);
+	} while (left);
+}
+
+void fill_buffer_mode2(struct thread_data *td, struct io_u *io_u, void *buf, unsigned long long min_write,
+	unsigned long long max_bs) 
+{
+	struct frand_state *rs = NULL;
+	struct thread_options *o = &td->o;
+	unsigned int perc = o->compress_percentage;
+	unsigned long long num_dedupe_chunks, left;
+	unsigned long long this_write, io_offset, set_num;
+	int is_unique_chunk;
+
+	num_dedupe_chunks = max_bs / o->dedupe_block_size;
+	for (int i = 0; i < num_dedupe_chunks; i++) {
+		// Pre - dedupe_block_size <= min_write enforced in init.c
+		min_write = o->dedupe_block_size;
+		left = o->dedupe_block_size;
+		// returns NULL for mode2 w/o bitmap for a dedupable block 
+		// and a state for a compressible or w/bitmap
+		rs = get_buf_state(td);
+		
+		if (io_u) {
+			io_offset = (io_u->offset + i*o->dedupe_block_size) / o->dedupe_block_size;
+			if (td->o.use_unique_bitmap) {
+				is_unique_chunk = axmap_isset(td->dedupe_bitmap, io_offset);
+			} else {
+				is_unique_chunk = (rs != NULL);
+			}
+		} else {
+			// io_u is NULL when a file does not exist and being layed out,
+			// use just compressed so far to fill the buffer
+			is_unique_chunk = true;
+		}
+
+		if (is_unique_chunk) {
+			do {
+				min_write = min(min_write, left);
+				this_write = min_not_zero(min_write, (unsigned long long) o->compress_chunk);
+
+				fill_random_buf_percentage(rs, buf, perc, this_write, this_write, 
+					o->buffer_pattern, o->buffer_pattern_bytes);
+
+				buf += this_write;
+				left -= this_write;
+			} while (left);
+			td->unique_count++;
+		} else {
+			// deduped block, each dedupe_unit block is already prefilled with compress_chunk strides
+			this_write = min_write;
+			set_num = dedupe_get_dedupe_set(td, io_offset);
+			// safe - len(buf) == max_bs, this_write = max_bs / dedupe_blk_size, dedupe_buffer >= max_bs
+			memcpy(buf, (void *)(td->dedupe_buffer + i*o->dedupe_block_size), this_write);
+			dedupe_encode_dedupe_set(buf, this_write, set_num);
+			buf += this_write;
+			td->deduped_count++;
+		}
+	}
+}
+
+void fill_io_buffer(struct thread_data *td, struct io_u *io_u, void *buf, unsigned long long min_write,
 		    unsigned long long max_bs)
 {
 	struct thread_options *o = &td->o;
@@ -2429,36 +2529,11 @@ void fill_io_buffer(struct thread_data *td, void *buf, unsigned long long min_wr
 		return;
 
 	if (o->compress_percentage || o->dedupe_percentage) {
-		unsigned int perc = td->o.compress_percentage;
-		struct frand_state *rs = NULL;
-		unsigned long long left = max_bs;
-		unsigned long long this_write;
-
-		do {
-			/*
-			 * Buffers are either entirely dedupe-able or not.
-			 * If we choose to dedup, the buffer should undergo
-			 * the same manipulation as the original write. Which
-			 * means we should retrack the steps we took for compression
-			 * as well.
-			 */
-			if (!rs)
-				rs = get_buf_state(td);
-
-			min_write = min(min_write, left);
-
-			this_write = min_not_zero(min_write,
-						(unsigned long long) td->o.compress_chunk);
-
-			fill_random_buf_percentage(rs, buf, perc,
-				this_write, this_write,
-				o->buffer_pattern,
-				o->buffer_pattern_bytes);
-
-			buf += this_write;
-			left -= this_write;
-			save_buf_state(td, rs);
-		} while (left);
+		if (o->dedupe_mode == DEDUPE_MODE_WORKING_SET2) {
+			fill_buffer_mode2(td, io_u, buf, min_write, max_bs);
+		} else {
+			fill_buffer_default(td, io_u, buf, min_write, max_bs);
+		}
 	} else if (o->buffer_pattern_bytes)
 		fill_buffer_pattern(td, buf, max_bs);
 	else if (o->zero_buffers)
@@ -2474,7 +2549,7 @@ void io_u_fill_buffer(struct thread_data *td, struct io_u *io_u,
 		      unsigned long long min_write, unsigned long long max_bs)
 {
 	io_u->buf_filled_len = 0;
-	fill_io_buffer(td, io_u->buf, min_write, max_bs);
+	fill_io_buffer(td, io_u, io_u->buf, min_write, max_bs);
 }
 
 static int do_sync_file_range(const struct thread_data *td,

@@ -1923,6 +1923,10 @@ Buffers and memory
 			Generate dedupe buffers by repeating previous writes
 		**working_set**
 			Generate dedupe buffers from working set
+		**working_set2**
+			Pre-generate dedupe pattern buffer, use dedupe set number 
+			which is a function of an IO offset, to make writes from 
+			the buffer dedupable to as many patterns as in working set
 
 	``repeat`` is the default option for fio. Dedupe buffers are generated
 	by repeating previous unique write.
@@ -1935,6 +1939,19 @@ Buffers and memory
 	to the desired over time while ``repeat`` maintains the desired percentage
 	throughout the job.
 
+	``working_set2`` serves to overcome ``working_set`` memory limitation for larger 
+	files and enables global deduplication when number of dedupe patterns is bigger than a file.
+	With ``working_set2``, ``dedupe_working_set_percentage=<int>`` should be provided.
+	``dedupe_working_set_percentage=<int>`` defines a percent of total size of all files to
+	be used as dedupe set. Two modes of choosing if a buffer is unique or deduped are supported.
+
+		**dedupe_use_unique_bitmap** 
+			If set, use a bitmap of deduped/unique blocks preallocated in advance. It allows to configure 
+			continuous runs of such blocks with ``dedupe_min_run (def=1)`` and ``dedupe_max_run (def=32)``. 
+			Runs can form a bigger sequences of such blocks because of random shuffling. This method 
+			gives precise dedupe percentage at the end of a run.
+			A random choise is used otherwise as it is for ``working_set``.
+	
 .. option:: dedupe_working_set_percentage=int
 
 	If ``dedupe_mode=<str>`` is set to ``working_set``, then this controls
@@ -1950,6 +1967,54 @@ Buffers and memory
 	all jobs that have this option set. The buffers are spread evenly between
 	participating jobs.
 
+.. option:: dedupe_buf_randrepeat=bool
+
+	When all the random seeds set randomly ``randrepeat=0``, keep a seed for dedupe 
+	buffers predictable across multiple runs. It may be needed for warming up a dedupe 
+	cache to have hits across runs. Positions of dedupe blocks are still random 
+	to avoid *dedupe same* situation when a deduped IO offset is always dedupable to a same 
+	pattern block. Default is ``false``.
+
+.. option:: dedupe_use_unique_bitmap=bool
+
+	If set, in ``working_set2`` mode, use a bitmap of deduped/unique blocks preallocated in advance. 
+	It allows to configure continuous runs of such blocks with ``dedupe_min_run (def=1)`` and 
+	``dedupe_max_run (def=32)``. Runs can form a bigger sequences of such blocks because of random shuffling. 
+	This method gives precise dedupe percentage at the end of a run for sequential writes. Default is ``false``.
+
+.. option:: dedupe_min_run=int, dedupe_max_run=int
+
+	Minimum and maximum number of consequetive dedupe or unique blocks (runs) when ``dedupe_use_unique_bitmap=1``.
+	The runs can form larger sequences because of a random shuffling. Having such runs is more realistic scenario 
+	rather than random selection if a block is dedupable or not. Defaults are ``1`` and ``32``.
+
+.. option:: dedupe_bs=int
+
+	Sets dedupe block size different than an IO size for ``dedupe_mode=working_set2``mode.
+	A larger IO is a sequence of ``dedupe_bs`` blocks, each could be dedupable or unique.
+	Default is ``min_bs[DDIR_WRITE]``.
+
+.. option:: dedupe_loadgen_num=int
+
+	If ``dedupe_mode=<str>`` is set to ``working_set2`` and ``dedupe_use_unique_bitmap=1``, 
+	then this sets  a sequence number of a load generator if running the load from multiple
+	hosts to calculate its respective offset in the dedupe patterns array so all the patetrns would
+	be used to acheive a glbal dedupe target
+
+.. option:: dedupe_loadgen_count=int
+
+	If ``dedupe_mode=<str>`` is set to ``working_set2`` and ``dedupe_use_unique_bitmap=1``, 
+	then this sets total number of load generators if running the load from multiple
+	hosts to calculate total test area size to be used as a base for dedupe patetrns 
+	amount calculation. Overwritten by ``total_test_area_size`` is set to non-zero.
+
+.. option:: dedupe_total_test_area_size=int
+
+	If ``dedupe_mode=<str>`` is set to ``working_set2``, then this sets
+	the total size all files or devices and used to calculate a number of 
+	dedupe patterns. If set, ``dedupe_loadgen_count`` will be ignored.
+
+	
 .. option:: invalidate=bool
 
 	Invalidate the buffer/page cache parts of the files to be used prior to

@@ -1,0 +1,17 @@
+[global]
+iodepth=1
+filename=dedupe-sim.bin
+dedupe_bs=4096
+blocksize=8192
+numjobs=1
+randrepeat=0
+buf_randrepeat=1
+dedupe_percentage=50
+dedupe_working_set_percentage=50
+dedupe_mode=working_set
+buffer_compress_percentage=50
+readwrite=write
+
+
+[test]
+size=200m

@@ -164,7 +164,7 @@ extern void io_u_queued(struct thread_data *, struct io_u *);
 extern int io_u_quiesce(struct thread_data *);
 extern void io_u_log_error(struct thread_data *, struct io_u *);
 extern void io_u_mark_depth(struct thread_data *, unsigned int);
-extern void fill_io_buffer(struct thread_data *, void *, unsigned long long, unsigned long long);
+extern void fill_io_buffer(struct thread_data *, struct io_u *, void *, unsigned long long, unsigned long long);
 extern void io_u_fill_buffer(struct thread_data *td, struct io_u *, unsigned long long, unsigned long long);
 void io_u_mark_complete(struct thread_data *, unsigned int);
 void io_u_mark_submit(struct thread_data *, unsigned int);

@@ -345,6 +345,13 @@ int convert_thread_options_to_cpu(struct thread_options *o,
 	o->dedupe_mode = le32_to_cpu(top->dedupe_mode);
 	o->dedupe_working_set_percentage = le32_to_cpu(top->dedupe_working_set_percentage);
 	o->dedupe_global = le32_to_cpu(top->dedupe_global);
+	o->dedupe_block_size = le64_to_cpu(top->dedupe_block_size);
+	o->dedupe_total_ta = le64_to_cpu(top->dedupe_total_ta);
+	o->dedupe_min_run = le32_to_cpu(top->dedupe_min_run);
+	o->dedupe_max_run = le32_to_cpu(top->dedupe_max_run);
+	o->lg_num = le32_to_cpu(top->lg_num);
+	o->lg_cnt = le32_to_cpu(top->lg_cnt);
+	o->use_unique_bitmap = le32_to_cpu(top->use_unique_bitmap);
 	o->block_error_hist = le32_to_cpu(top->block_error_hist);
 	o->replay_align = le32_to_cpu(top->replay_align);
 	o->replay_scale = le32_to_cpu(top->replay_scale);
@@ -576,6 +583,13 @@ void convert_thread_options_to_net(struct thread_options_pack *top,
 	top->dedupe_mode = cpu_to_le32(o->dedupe_mode);
 	top->dedupe_working_set_percentage = cpu_to_le32(o->dedupe_working_set_percentage);
 	top->dedupe_global = cpu_to_le32(o->dedupe_global);
+	top->dedupe_block_size = __cpu_to_le64(o->dedupe_block_size);
+	top->dedupe_total_ta = __cpu_to_le64(o->dedupe_total_ta);
+	top->dedupe_min_run = cpu_to_le32(o->dedupe_min_run);
+	top->dedupe_max_run = cpu_to_le32(o->dedupe_max_run);
+	top->lg_num = cpu_to_le32(o->lg_num);
+	top->lg_cnt = cpu_to_le32(o->lg_cnt);
+	top->use_unique_bitmap = cpu_to_le32(o->use_unique_bitmap);
 	top->block_error_hist = cpu_to_le32(o->block_error_hist);
 	top->replay_align = cpu_to_le32(o->replay_align);
 	top->replay_scale = cpu_to_le32(o->replay_scale);

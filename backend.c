@@ -2882,6 +2882,13 @@ int fio_backend(struct sk_out *sk_out)
 
 	helper_thread_exit();
 
+	if (d_is_set(FD_DEDUPE)) {
+		for_each_td(td) {
+			if (td->o.dedupe_mode == DEDUPE_MODE_WORKING_SET2 && td->o.use_unique_bitmap)
+				dprint(FD_DEDUPE, "td %p, written unique blocks %llu, deduped blocks: %llu\n", (void*)td, td->unique_count, td->deduped_count);
+		} end_for_each();
+	}
+
 	if (!fio_abort) {
 		__show_run_stats();
 		if (write_bw_log) {

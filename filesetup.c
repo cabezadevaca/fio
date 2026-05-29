@@ -216,7 +216,7 @@ static int extend_file(struct thread_data *td, struct fio_file *f)
 		if (bs > left)
 			bs = left;
 
-		fill_io_buffer(td, b, bs, bs);
+		fill_io_buffer(td, NULL, b, bs, bs);
 
 		r = write(f->fd, b, bs);
 
@@ -400,7 +400,7 @@ int generic_prepopulate_file(struct thread_data *td, struct fio_file *f)
 		if (bs > left)
 			bs = left;
 
-		fill_io_buffer(td, b, bs, bs);
+		fill_io_buffer(td, NULL, b, bs, bs);
 
 		r = write(f->fd, b, bs);
 

@@ -143,6 +143,7 @@ enum {
 	FIO_RAND_FILE_SIZE_OFF,
 	FIO_RAND_TRIM_OFF,
 	FIO_RAND_BUF_OFF,
+	FIO_RAND_DEDUPE_BUF_OFF,
 	FIO_RAND_SEQ_RAND_READ_OFF,
 	FIO_RAND_SEQ_RAND_WRITE_OFF,
 	FIO_RAND_SEQ_RAND_TRIM_OFF,
@@ -215,6 +216,9 @@ struct thread_data {
 	struct io_log *bw_log;
 	struct io_log *iops_log;
 
+	unsigned long long deduped_count;
+	unsigned long long unique_count;
+
 	struct workqueue log_compress_wq;
 
 	struct thread_data *parent;
@@ -281,12 +285,16 @@ struct thread_data {
 	struct frand_state buf_state;
 	struct frand_state buf_state_prev;
 	struct frand_state buf_state_ret;
+	struct frand_state dedupe_buf_state;
 	struct frand_state dedupe_state;
 	struct frand_state zone_state;
 	struct frand_state prio_state;
 	struct frand_state dedupe_working_set_index_state;
 	struct frand_state *dedupe_working_set_states;
 	struct frand_state sprandom_state;
+
+	char *dedupe_buffer;
+	struct axmap *dedupe_bitmap;
 
 	unsigned long long num_unique_pages;
 
@@ -526,6 +534,8 @@ struct thread_data {
 	CUcontext cu_ctx;
 	CUdeviceptr dev_mem_ptr;
 #endif
+
+	unsigned long long global_offset;
 
 };
 

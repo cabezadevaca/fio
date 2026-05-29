@@ -37,6 +37,7 @@ enum fio_memtype {
 enum dedupe_mode {
 	DEDUPE_MODE_REPEAT = 0,
 	DEDUPE_MODE_WORKING_SET = 1,
+	DEDUPE_MODE_WORKING_SET2 = 2,
 };
 
 #define ERROR_STR_MAX	128
@@ -168,6 +169,8 @@ struct thread_options {
 	unsigned int override_sync;
 	unsigned int rand_repeatable;
 	unsigned long long rand_seed;
+	unsigned int buf_rand_repeatable;
+	unsigned long long buf_rand_seed;
 	unsigned int log_avg_msec;
 	unsigned int log_hist_msec;
 	unsigned int log_hist_coarseness;
@@ -272,7 +275,15 @@ struct thread_options {
 	unsigned int compress_percentage;
 	unsigned int compress_chunk;
 	unsigned int dedupe_percentage;
+	unsigned long long dedupe_block_size;
+	unsigned long long dedupe_total_ta;
+	unsigned int dedupe_min_run;
+	unsigned int dedupe_max_run;
+	unsigned int lg_num;
+	unsigned int lg_cnt;
+
 	unsigned int dedupe_mode;
+	unsigned int use_unique_bitmap;
 	unsigned int dedupe_working_set_percentage;
 	unsigned int dedupe_global;
 	unsigned int time_based;
@@ -612,6 +623,13 @@ struct thread_options_pack {
 	uint32_t dedupe_mode;
 	uint32_t dedupe_working_set_percentage;
 	uint32_t dedupe_global;
+	uint64_t dedupe_block_size;
+	uint64_t dedupe_total_ta;
+	uint32_t dedupe_min_run;
+	uint32_t dedupe_max_run;
+	uint32_t lg_num;
+	uint32_t lg_cnt;
+	uint32_t use_unique_bitmap;
 	uint32_t time_based;
 	uint32_t disable_lat;
 	uint32_t disable_clat;
@@ -631,7 +649,6 @@ struct thread_options_pack {
 	uint32_t lat_percentiles;
 	uint32_t slat_percentiles;
 	uint32_t percentile_precision;
-	uint32_t pad2;
 	fio_fp64_t percentile_list[FIO_IO_U_LIST_MAX_LEN];
 
 	uint8_t read_iolog_file[FIO_TOP_STR_MAX];
