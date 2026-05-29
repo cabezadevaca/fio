@@ -310,7 +310,7 @@ int fio_gf_open_file(struct thread_data *td, struct fio_file *f)
 					if (bs > left)
 						bs = left;
 
-					fill_io_buffer(td, b, bs, bs);
+					fill_io_buffer(td, NULL, b, bs, bs);
 
 					r = glfs_write(g->fd, b, bs, 0);
 					dprint(FD_IO,

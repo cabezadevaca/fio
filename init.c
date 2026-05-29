@@ -1295,9 +1295,9 @@ static int setup_random_seeds(struct thread_data *td)
 				}
 				seed *= 0x9e370001UL;
 			}
-			dprint(FD_RANDOM, "Dedupe Buff seed %lu\n", td->rand_seeds[FIO_RAND_DEDUPE_BUF_OFF]);
-			dprint(FD_RANDOM, "Dedupe working set seed %lu\n", td->rand_seeds[FIO_RAND_DEDUPE_WORKING_SET_IX]);
-			dprint(FD_RANDOM, "Dedupe state seed %lu\n", td->rand_seeds[FIO_DEDUPE_OFF]);
+			dprint(FD_RANDOM, "Dedupe Buff seed        %" PRIu64 "\n", td->rand_seeds[FIO_RAND_DEDUPE_BUF_OFF]);
+			dprint(FD_RANDOM, "Dedupe working set seed %" PRIu64 "\n", td->rand_seeds[FIO_RAND_DEDUPE_WORKING_SET_IX]);
+			dprint(FD_RANDOM, "Dedupe state seed       %" PRIu64 "\n", td->rand_seeds[FIO_DEDUPE_OFF]);
 		}
 	} else {
 		seed = td->o.rand_seed;
